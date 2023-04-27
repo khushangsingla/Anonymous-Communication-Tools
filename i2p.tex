@@ -56,12 +56,28 @@ among I2P routers. This is non-anonymous transfer. This layer has two protocols 
 		possibly, a router may not have access to complete database at any given time. As I2P is not widely used, it 
 		is possible to find these details in a few tries but if the usage increases, it might become difficult to access
 		this information.\\
-		Network database stores two kinds of data: \textbf{leaseSets}(Section \ref{subsec:leaseSet}) and \textbf{routerInfo}(Section \ref{subsec:routerInfo})
+		Network database stores two kinds of data: \textbf{leaseSets}(Section \ref{subsubsec:leaseSet}) and \textbf{routerInfo}(Section \ref{subsubsec:routerInfo})
 
 \end{itemize}
 \subsection{Network Database}
+
+\subsubsection{Distributed Storage}
+Network Database (NetDB) is a distributed storage. The storage is distributed among I2P nodes.
+A special set of nodes called \textbf{floodfill} nodes are used for storing the data. There is no fixed
+set of floodfill nodes. The users of I2P can Opt-in as Floodfill routers. Any router which wants to 
+publish it's routerInfo does so by sending the data to the nearest floodfill router. The information of
+whether a router is a floodfill router is stored in routerInfo of the corresponding router. When a floodfill
+router gets a DatabaseStoreMessage, it floods it.
+
+For flooding, it looks up several floodfill routers closest to the routing key of NetDb entry, where routing
+key is SHA256 hash of routerIdentity/Destination with date appended.
+
+Unlike Tor, these floodfill peers need not be trusted, and may change over time. Usually, the floodfill
+routers are one with large bandwidth availability. The only extra work they need to do is \textbf{respond to
+netDB stores and queries}.
+
 \subsubsection{Lease Sets}
-\label{subsec:leaseSet}
+\label{subsubsec:leaseSet}
 Lease Sets are used to document tunnel entry points for a particular client destination. The following information is
 stored in a Lease Set.
 \begin{description}
@@ -81,7 +97,7 @@ stored in a Lease Set.
 There are various types of Lease sets like Unpublished Lease sets, Encrypted LeaseSets etc.
 
 \subsubsection{Router Info}
-\label{subsec:routerInfo}
+\label{subsubsec:routerInfo}
 RouterInfo includes the following details
 \begin{description}
 	\item [Router's Identity] stores an encryption key, a signing key and a certificate to authorize that.
@@ -95,4 +111,44 @@ RouterInfo includes the following details
 	\item [Signature] of all the above data.
 \end{description}
 Router Info is stored in NetDB. This is required for building tunnels.
+
+\subsection{Tunnels}
+Tunnels can be divided into two types of tunnels, namely inbound tunnels and outbound tunnels. The creator of the
+tunnel is the only one who knows all participants of tunnels. There are three types of routers in tunnels, namely
+gateway, participants, and endpoint. The gateway collects all messages, combines them and sends to next hop. The
+participant routers just decrypt/encrypt and forward to nexthop. They don't even know if it is an inbound or outbound
+tunnel. The endpoint recieves the messages, opens it and forwards it, either to another router, or to a tunnel gateway
+or locally.
+
+\subsubsection*{Building a Tunnel}
+For building a tunnel, we need to ensure that the hops can't be associated to each other. Only the next hop peers
+should be able to know that they are in same tunnel. Every hop in the tunnel gets a random non-zero tunnel ID. Every
+record gets a random tunnel IV key, reply IV, layer key and reply key. The record contains the tunnel ID, the next
+hop tunnel ID, routerid hash, tunnel layer key and iv key, reply key and iv and some uninterpreted padding to send to next hop.
+The tunnel creation is accomplished by a single message passed along the path of peers in the tunnel, rewritten
+in place, and transmitted back to the tunnel creator. This is made up of variable number of records, each record
+potentially for each peer along the path. For building an inbound tunnel, an outbound tunnel is used to send this message
+whereas it is directly sent as next hop for building outbound tunnel. Every hop replaces it's record by it's reply and
+the endpoint is instructed to send the message to the tunnel creator.
+
+A gateway first does some message pre-processing and then sends it the next hop after gateway encryption. In this pre-processing,
+it takes the collected I2NP messages, makes \{delivery instructions,message\} pairs, adds tunnel ID, IV, checksum and padding. It
+then picks an IV, iteratively encrypts it and the message as needed and forwards that to next hop with tunnel ID and IV.
+
+When a participant recieves a tunnel message, it reads the tunnel
+id, maps it with next hop tunnel id and sends it to the next hop. The participant encrypts the recieved IV with AES256ECB
+using their IV key to determine the current IV and uses that IV with it's layer key to encrypt that data. It then encrypts 
+the current IV with AES256/ECB using their IV key again, then forwards the tuple \{nextTunnelId,nextIV,encryptedData\} to the
+next hop.
+
+For an outbound tunnel, the gateway just encrypts data using it's layer key to get the pre-processed data. Whereas for inbound
+tunnels, the endpoint needs to decrypt that according to each hop's layer key and IV to get the pre-processed data.
+\subsection{Sending Messages}
+For sending a message, a router needs an outbound tunnel. For this, a tunnel is created. For creating a tunnel, the
+router requests routerInfo from netDB through Database. It selects routers to use in the tunnel and builds a tunnel.
+Then it uses this outbound tunnel to request leaseSet of destination from Database. This leaseSet is used to get 
+the inbound tunnel gateway routerIdentity. It then puts delivery instruction for the message as this gateway router's
+information and tunnel id. This is then encrypted accordingly and sent to next hop. When it reaches the endpoint of this
+tunnel, it gets the forwarding instructions. The message is forwarded to the gateway which then sends it to the required 
+destination. For a reply, the sender needs to put it's lease or Destination information in the message sent.
 \end{document}
