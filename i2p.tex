@@ -8,6 +8,24 @@ through the invisible internet. One may access outside internet through proxies 
 the proxies may be malicious and it may not be safe to do so. This also is a big problem hindering the
 popularity of i2p.
 
+\subsection{I2P Protocol}
+I2P adds more layers in Application Layer of primitive internet to introduce anonymity. Figure \ref{fig:i2p_protocol_stack}
+shows the layers in this stack.
+
+\begin{figure}[h]
+	\centering
+	\caption{I2P Protocol Stack}
+	\label{fig:i2p_protocol_stack}
+	\includegraphics[width=\textwidth]{Resources/images/i2p_protocol_stack.png}
+\end{figure}
+
+I2P transport layer is built over Transport layer of regular internet. It is strictly for next-hop transfer
+among I2P routers. This is non-anonymous transfer. This layer has two protocols built over TCP and UDP each.
+\begin{itemize}
+	\item NTCP2 - New I/O based TCP
+	\item SSU - Secure and Semi-Reliable UDP
+\end{itemize}
+
 \subsection{Structure of I2P: Components}
 \begin{itemize}
 	\item \textbf{Tunnel} \\
@@ -38,6 +56,43 @@ popularity of i2p.
 		possibly, a router may not have access to complete database at any given time. As I2P is not widely used, it 
 		is possible to find these details in a few tries but if the usage increases, it might become difficult to access
 		this information.\\
-		Network database stores two kinds of data: \textbf{Lease Sets} and \textbf{routerInfo}
+		Network database stores two kinds of data: \textbf{leaseSets}(Section \ref{subsec:leaseSet}) and \textbf{routerInfo}(Section \ref{subsec:routerInfo})
+
 \end{itemize}
+\subsection{Network Database}
+\subsubsection{Lease Sets}
+\label{subsec:leaseSet}
+Lease Sets are used to document tunnel entry points for a particular client destination. The following information is
+stored in a Lease Set.
+\begin{description}
+	\item [Lease] stores information of the inbound tunnel gateway. A lease
+		stores the following information. It is needed to send messages to the Destination.
+		\begin{description}
+			\item [Gateway Router] is specified for the tunnel. It is specified by spcifying it's identity.
+			\item [Tunnel ID] to be used to send message through the tunnel.
+			\item [Expiry Date] stores the time till when the tunnel is available.
+		\end{description}
+	\item [Destination] encryption key, signing key and a certificate.
+	\item [Additional encryption public key] for use in encrypting garlic messages. It is used for end-to-end 
+		ElGamal/AES + Session Tag encryption.
+	\item [Signature] of the lease set to ensure that the data is published by the entity mentioned
+		in destination.
+\end{description}
+There are various types of Lease sets like Unpublished Lease sets, Encrypted LeaseSets etc.
+
+\subsubsection{Router Info}
+\label{subsec:routerInfo}
+RouterInfo includes the following details
+\begin{description}
+	\item [Router's Identity] stores an encryption key, a signing key and a certificate to authorize that.
+		The public\_key is used for ElGamal Encryption in next-hop messages. The signing public key and
+		key certificate are used for verifying signatures.
+	\item [Contact Addresses] where the router can be reached. It contains mapping of transport protocol (NTCP or SSU)
+		with ip address and port. 
+	\item [Publish Date] is the time when this info was published.
+	\item [Options] is a set of arbitrary options for telling the bandwidth capacities, router version, netId. There
+		are some other stat options also.
+	\item [Signature] of all the above data.
+\end{description}
+Router Info is stored in NetDB. This is required for building tunnels.
 \end{document}
